@@ -4,6 +4,7 @@
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 ![mypy strict](https://img.shields.io/badge/mypy-strict-success)
 ![Typed](https://img.shields.io/badge/typing-py.typed-success)
+![MIT licence](https://img.shields.io/badge/licence-MIT-blue)
 
 A [Ruach Studio](https://github.com/igrbible/Ruach_Studio) **Refiner plugin** that
 turns the separated stems of a take into MIDI with Spotify's
@@ -176,5 +177,7 @@ each is isolated in one module so it is cheap to change.
   Intelligence Lab, Apache-2.0.
 * [Ruach Studio](https://github.com/igrbible/Ruach_Studio), AGPL-3.0. This plugin
   runs as a separate process in its own virtual environment.
-* No licence has been chosen for this repository yet; add a `LICENSE` file before
-  inviting outside contributions.
+* This plugin is released under the [MIT licence](LICENSE): use, modify, bundle
+  and redistribute it, including inside Ruach Studio, with no conditions beyond
+  keeping the copyright notice. MIT is compatible with Ruach Studio's AGPL-3.0,
+  and the plugin runs as a separate process, so it adds no obligations on either side.

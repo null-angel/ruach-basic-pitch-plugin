@@ -7,9 +7,13 @@ name = "ruach-basic-pitch"
 version = "0.2.0"
 description = "Ruach Studio Refiner plugin: transcribe a take's stems to MIDI with Basic Pitch"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Steven Altsman" }]
 requires-python = ">=3.10"
 dependencies = ["basic-pitch>=0.4.0"]
 classifiers = [
+    "Operating System :: OS Independent",
     "Typing :: Typed",
     "Programming Language :: Python :: 3",
 ]

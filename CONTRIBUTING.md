@@ -23,3 +23,7 @@ Thanks for helping. The full workflow is in
   protocol or callable, so tests can fake it.
 * **Label assumptions.** If you rely on something Ruach Studio does not document,
   say so in `docs/PLUGIN_CONTRACT.md` and keep it in one module.
+
+## Licence
+
+By contributing you agree your work is released under the project's [MIT licence](LICENSE).

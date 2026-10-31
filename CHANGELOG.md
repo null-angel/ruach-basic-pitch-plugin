@@ -6,6 +6,10 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- MIT `LICENSE`, so Ruach Studio's owner and its users can use, modify and
+  redistribute the plugin without extra conditions.
+
 ## [0.2.0] - 2026-10-31
 
 ### Added
