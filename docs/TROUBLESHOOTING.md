@@ -35,10 +35,33 @@ Linux (Windows via WSL2), so the Linux layout `bin/python` is right.
 
 ## Installing Basic Pitch fails
 
-Basic Pitch depends on TensorFlow (or, in newer releases, other runtimes). Match
-the Python version to what its current release supports; if installation fails on
-a very new Python, create the venv with an older one. Because the plugin has its
-own venv, this never affects the studio's environment.
+`basic-pitch` 0.4.0 pins `tensorflow<2.15.1` on Linux, and TensorFlow publishes no
+wheel for Python 3.12 or newer. On such a Python, pip stops with
+`No matching distribution found for tensorflow<2.15.1`.
+
+Two fixes; the plugin works the same with either:
+
+* **ONNX Runtime (recommended on 3.12+):**
+
+  ```bash
+  .venv/bin/pip install --no-deps basic-pitch==0.4.0
+  .venv/bin/pip install -r requirements-onnx.txt
+  ```
+
+  Basic Pitch uses whichever runtime is installed and loads its bundled ONNX model.
+  Warnings that TensorFlow and tflite-runtime are not installed are expected.
+* **TensorFlow:** create the venv with Python 3.10 or 3.11 and use
+  `requirements.txt`.
+
+Because the plugin has its own venv, none of this touches the studio's environment.
+
+## `No module named 'pkg_resources'`
+
+`resampy` imports `pkg_resources`, which `setuptools` 81 and later no longer
+ships, and new venvs may not include `setuptools` at all. Run
+`.venv/bin/pip install 'setuptools<81'` (already listed in `requirements-onnx.txt`).
+The step reports this per stem in `report.csv` and fails with
+`every stem failed; first: ...` when no stem works.
 
 ## It is slow
 

@@ -55,6 +55,15 @@ python -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
+**On Python 3.12 or newer** (for example 3.14), Basic Pitch's pinned TensorFlow has
+no wheel, so use the ONNX Runtime backend instead. It needs no TensorFlow and the
+plugin code is identical:
+
+```bash
+.venv/bin/pip install --no-deps basic-pitch==0.4.0
+.venv/bin/pip install -r requirements-onnx.txt
+```
+
 Then reload the studio page; the lab reads `user/plugins/*/plugin.json` when the
 page asks (`GET /lab/plugins`). A plugin that does not parse is named under
 `errors` there while the others still load.
@@ -155,10 +164,11 @@ each is isolated in one module so it is cheap to change.
 * **`.mid` in the take tree.** The docs define audio versions and text/CSV
   reports, not MIDI, so the lab may show a `.mid` branch that cannot be played.
   The files are still written and open fine in a DAW.
-* **Verified so far.** The code is type-checked and tested against a fake
-  transcriber, and Basic Pitch's `predict()` signature was checked against its
-  0.4.0 source. It has **not yet been run end-to-end inside Ruach Studio** with a
-  real take.
+* **Verified so far.** Type-checked and tested against a fake transcriber. Also run
+  end to end with **real Basic Pitch** (ONNX Runtime, Python 3.14) on a Ruach Studio
+  2.0.2 install: a synthetic four-note melody came back as the four right pitches,
+  and the running lab listed the step under `GET /lab/plugins` with no errors. It has
+  **not yet been driven from the Refiner page** with a real take.
 
 ## Documentation
 

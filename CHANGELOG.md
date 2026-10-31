@@ -7,6 +7,8 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- `requirements-onnx.txt` and install notes for Python 3.12+, where Basic Pitch's
+  TensorFlow pin cannot be installed; verified with real Basic Pitch on Python 3.14.
 - MIT `LICENSE`, so Ruach Studio's owner and its users can use, modify and
   redistribute the plugin without extra conditions.
 
