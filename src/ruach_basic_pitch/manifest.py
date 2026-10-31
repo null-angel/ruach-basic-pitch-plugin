@@ -2,9 +2,11 @@
 
 The lab passes a folder containing ``manifest.json``. Per Ruach Studio's
 ``docs/PLUGINS.md`` the manifest lists the stems, "each with ``name``, ``title``
-and ``file``". The documentation does not spell out the top-level shape, so
-:func:`load_stems` accepts both ``{"stems": [...]}`` and a bare list. If a real
-take disagrees, this is the only module that needs to change.
+and ``file``". The documentation does not spell out the top-level shape; a real
+take writes ``{"files": [...]}`` (verified against the lab's ``stems-four``
+branch), so :func:`load_stems` accepts ``{"files": [...]}``, ``{"stems": [...]}``
+and a bare list. If a real take disagrees again, this is the only module that
+needs to change.
 
 The manifest is untrusted input: every value is narrowed from ``object`` before
 use, and stem files are confined to the stem folder.
@@ -60,7 +62,7 @@ def load_stems(audio_dir: Path) -> list[Stem]:
     except json.JSONDecodeError as exc:
         raise ManifestError(f"manifest.json is not valid JSON: {exc}") from exc
 
-    entries: object = raw.get("stems") if isinstance(raw, dict) else raw
+    entries: object = (raw.get("stems") or raw.get("files")) if isinstance(raw, dict) else raw
     if not isinstance(entries, list) or not entries:
         raise ManifestError("manifest.json lists no stems")
 
