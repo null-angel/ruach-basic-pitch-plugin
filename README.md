@@ -1,114 +1,180 @@
 # ruach-basic-pitch
 
-A [Ruach Studio](https://github.com/igrbible/Ruach_Studio) Refiner plugin that
-transcribes the stems of a take to MIDI with Spotify's
+[![CI](https://github.com/null-angel/ruach-basic-pitch-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/null-angel/ruach-basic-pitch-plugin/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![mypy strict](https://img.shields.io/badge/mypy-strict-success)
+![Typed](https://img.shields.io/badge/typing-py.typed-success)
+
+A [Ruach Studio](https://github.com/igrbible/Ruach_Studio) **Refiner plugin** that
+turns the separated stems of a take into MIDI with Spotify's
 [Basic Pitch](https://github.com/spotify/basic-pitch).
 
 Ruach Studio gets its MIDI from the *score* YuE2 writes before it renders audio.
-This plugin goes the other way: it reads the finished (or refined) audio and
-recovers notes from it, one `.mid` per stem, so you can edit what the model
-actually sang and played.
+This plugin goes the other way: it listens to the finished (or refined) audio and
+recovers the notes, **one `.mid` per stem**, so you can edit what the model
+actually sang and played in a DAW or the piano roll.
 
-## What it does
+## Contents
 
-Adds one step, **To MIDI**, after the Refiner's own steps:
+- [How it fits](#how-it-fits)
+- [Install](#install)
+- [Use](#use)
+- [What you get](#what-you-get)
+- [Repository layout](#repository-layout)
+- [Quality bar](#quality-bar)
+- [Known limits and assumptions](#known-limits-and-assumptions)
+- [Documentation](#documentation)
+- [Credits and licence](#credits-and-licence)
 
-1. Receives the take's stem set (the lab runs it with `"input": "stems"`).
-2. Runs Basic Pitch on each stem. It works best on one instrument at a time,
-   which is why it works on stems and not the full mix.
-3. Writes `<stem>.mid` for every stem that contains notes.
-4. Writes `report.csv` (`stem,status,notes,detail`) and a one-line summary.
+## How it fits
 
-A stem with no detected notes gets no MIDI file and shows as `silent` in the
-report. A stem that fails shows as `error`; the other stems still finish. The
-step only fails if every stem fails.
+```mermaid
+flowchart LR
+    Take["Take"] --> Split["Refiner: split into stems"]
+    Split --> Step["To MIDI<br/>(this plugin)"]
+    Step --> Mid["stem.mid per stem"]
+    Step --> Rep["report.csv"]
+    Mid --> DAW["DAW / piano roll"]
+```
+
+The Refiner runs its own steps in order (Spectrum, Artifacts, Debuzz, Lyrics,
+Stems, Remaster, Upscale); a plugin adds steps of its own *after* them without
+touching the studio's code. This plugin adds one step, **To MIDI**.
 
 ## Install
 
-Requires the Linux/WSL2 setup Ruach Studio itself runs on, and Python 3.10+.
+Requires Python 3.10+ and the Linux (or Windows-via-WSL2) setup Ruach Studio
+itself runs on.
 
 ```bash
 cd <ruach-studio>/user/plugins
-git clone https://github.com/null-angel/ruach-basic-pitch-plugin ruach-basic-pitch   # or symlink a folder kept elsewhere
+git clone https://github.com/null-angel/ruach-basic-pitch-plugin ruach-basic-pitch
 cd ruach-basic-pitch
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-The plugin has its own venv (`"python": ".venv/bin/python"` in `plugin.json`),
-so TensorFlow and Basic Pitch stay out of the studio's environment. Reload the
-studio page; the lab reads `user/plugins/*/plugin.json` on request
-(`GET /lab/plugins`). A plugin that does not parse shows up under `errors`
-there while the others still load.
+Then reload the studio page; the lab reads `user/plugins/*/plugin.json` when the
+page asks (`GET /lab/plugins`). A plugin that does not parse is named under
+`errors` there while the others still load.
+
+The plugin has its **own virtual environment** (`"python": ".venv/bin/python"` in
+`plugin.json`), so TensorFlow and Basic Pitch stay out of the studio's
+environment. You can also keep the folder elsewhere and link it into
+`user/plugins/`.
 
 ## Use
 
-In the Refiner, split the take into stems first (the panel offers a split when
-there is none), then run **To MIDI** on a stem set.
+1. Open a take in the Refiner and **split it into stems** (the panel offers a
+   split when the take has none).
+2. Run **To MIDI** on a stem set.
 
-| Field | Default | Meaning |
+| Field | Default | Range | Meaning |
+| --- | --- | --- | --- |
+| Onset threshold | 0.5 | 0.1 – 0.9 | Higher gives fewer, surer notes |
+| Frame threshold | 0.3 | 0.1 – 0.9 | Higher gives shorter, tidier notes |
+| Shortest note, ms | 127 | 20 – 500 | Notes shorter than this are dropped |
+| Pitch bends | on | – | Keep pitch-bend messages in the MIDI |
+
+Basic Pitch works best on **one instrument at a time**, which is why the step
+works on stems rather than on the full mix.
+
+You can also run it by hand, which is handy for trying settings:
+
+```bash
+.venv/bin/python transcribe.py <stem-folder> <out-folder> <params.json>
+```
+
+## What you get
+
+* `<stem>.mid`: one per stem that contains notes.
+* `report.csv`: one row per stem with `stem,status,notes,detail`.
+* A one-line summary beside the branch, for example
+  `2 of 3 stems transcribed, 412 notes, 1 failed`.
+
+| Stem status | Meaning | MIDI file |
 | --- | --- | --- |
-| Onset threshold | 0.5 | Higher means fewer, surer notes |
-| Frame threshold | 0.3 | Higher means shorter, tidier notes |
-| Shortest note, ms | 127 | Notes shorter than this are dropped |
-| Pitch bends | on | Keep pitch-bend messages |
+| `ok` | Transcribed; at least one note found | yes |
+| `silent` | Ran, but nothing cleared the thresholds (normal for drums) | no |
+| `error` | Transcription raised; see `detail` | no |
 
-## Layout
+One failing stem never loses the others. The step as a whole fails only if
+**every** stem failed.
+
+## Repository layout
 
 ```
 plugin.json                    what the lab reads: id, step, fields
-transcribe.py                  thin entry point: PYTHON transcribe.py AUDIO OUTDIR PARAMS.json
+transcribe.py                  thin entry: PYTHON transcribe.py AUDIO OUTDIR PARAMS.json
 src/ruach_basic_pitch/
-  manifest.py                  read the stem set's manifest.json
-  params.py                    parse and clamp the step's fields
+  contract.py                  wire-format types: ExitCode, StepPayload, FileEntry
+  manifest.py                  read and validate the stem set's manifest.json
+  params.py                    parse and clamp the step's fields (owns the bounds)
   transcriber.py               Transcriber protocol + the real Basic Pitch adapter
-  runner.py                    run every stem, collect outcomes (pure; injectable)
-  report.py                    outcome type, report.csv, summary line
+  runner.py                    run every stem, isolate failures, write outputs
+  report.py                    StemOutcome, report.csv text, summary line
   cli.py                       the lab's command-line contract
-tests/                         pytest-bdd scenarios + unit tests
+  py.typed                     PEP 561 marker
+tests/
+  features/transcribe.feature  behaviour in plain English (Gherkin)
+  test_transcribe_steps.py     pytest-bdd step definitions
+  test_units.py                params, report, manifest, CLI edges
+  test_plugin_manifest.py      plugin.json must agree with the code
+docs/                          architecture, contract, development, troubleshooting
 ```
 
-Design notes: the runner depends on a `Transcriber` protocol rather than on
-Basic Pitch, so tests inject a fake and never load TensorFlow (dependency
-inversion). The runner and helpers are pure functions over small frozen
-dataclasses, and the only I/O is at the edges (`manifest.py`, `runner.py`
-writing outputs, `cli.py`).
+## Quality bar
 
-## Develop
+* **Strictly typed.** `mypy --strict` over `src/` and `tests/`, no `Any` in
+  `src/`, full annotations enforced by ruff, `py.typed` shipped. Frozen
+  `slots` dataclasses carry data, `TypedDict`s describe the wire format,
+  `Literal`/`IntEnum` close the sets, `Protocol`s mark the seams.
+* **Behaviour-first tests.** Scenarios in Gherkin drive the real CLI with a fake
+  transcriber; CI never installs TensorFlow.
+* **Documented.** Google-style docstrings on every module, class and public
+  function (enforced), plus the guides under [`docs/`](docs).
+* **Dependency inversion.** The runner depends on a `Transcriber` protocol, not
+  on Basic Pitch, so the engine is swappable and the core is testable.
+* **Drift-proof.** A test fails if `plugin.json` disagrees with the code on field
+  keys, defaults or bounds.
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest
+ruff check . && ruff format --check . && mypy && pytest
 ```
 
-Behaviour is specified in `tests/features/transcribe.feature` (Gherkin, run by
-pytest-bdd). Add a scenario first, then the step, then the code.
+## Known limits and assumptions
 
-## Things to know
+Ruach Studio's plugin documentation leaves a few things open. This plugin's
+choices are labelled in [`docs/PLUGIN_CONTRACT.md`](docs/PLUGIN_CONTRACT.md) and
+each is isolated in one module so it is cheap to change.
 
-- **Stem manifest shape.** Ruach's docs say `manifest.json` "lists the stems,
-  each with `name`, `title` and `file`". `manifest.py` accepts either
-  `{"stems": [...]}` or a bare list. If a real take's manifest differs,
-  `load_stems` is the one place to change.
-- **`.mid` in the take tree.** The plugin docs define audio versions and
-  text/JSON/CSV reports, but not MIDI. The lab may show a `.mid` branch that
-  does not play. If that bothers you, add a sonified WAV per stem (Basic Pitch
-  can render one) and list it first in `files`.
-- **Non-stem input.** The step is declared `"input": "stems"`, so it does not
-  run on a single file.
-- **Licence.** Basic Pitch is Apache-2.0. This plugin runs in a separate process
-  and venv from Ruach Studio (AGPL-3.0); choose the licence for this repo as
-  you like.
+* **Stem manifest shape.** The docs say `manifest.json` lists the stems with
+  `name`, `title` and `file`. The plugin accepts `{"stems": [...]}` or a bare
+  list. If a real take differs, only `manifest.py` changes.
+* **`.mid` in the take tree.** The docs define audio versions and text/CSV
+  reports, not MIDI, so the lab may show a `.mid` branch that cannot be played.
+  The files are still written and open fine in a DAW.
+* **Verified so far.** The code is type-checked and tested against a fake
+  transcriber, and Basic Pitch's `predict()` signature was checked against its
+  0.4.0 source. It has **not yet been run end-to-end inside Ruach Studio** with a
+  real take.
 
-## Contract with the lab
+## Documentation
 
-The lab runs `PYTHON transcribe.py AUDIO OUTDIR PARAMS.json` in the plugin
-folder. `AUDIO` is the stem set's folder. The last line of stdout is JSON:
+| Guide | What it covers |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | Diagrams, modules, design decisions, SOLID mapping, extension points |
+| [Plugin contract](docs/PLUGIN_CONTRACT.md) | Exactly what the lab sends and expects; documented vs assumed |
+| [Development](docs/DEVELOPMENT.md) | Setup, commands, typing and docs policy, adding a field, releasing |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Symptoms, causes and fixes |
+| [Changelog](CHANGELOG.md) | What changed, per version |
+| [Contributing](CONTRIBUTING.md) | The short workflow and standards |
 
-```json
-{"files": [{"name": "Vocals (MIDI)", "file": "vocals.mid"},
-           {"name": "note counts", "file": "report.csv"}],
- "summary": "2 of 2 stems transcribed, 412 notes", "took": 18.3}
-```
+## Credits and licence
 
-Full reference: Ruach Studio's `docs/PLUGINS.md`.
+* [Basic Pitch](https://github.com/spotify/basic-pitch) by Spotify's Audio
+  Intelligence Lab, Apache-2.0.
+* [Ruach Studio](https://github.com/igrbible/Ruach_Studio), AGPL-3.0. This plugin
+  runs as a separate process in its own virtual environment.
+* No licence has been chosen for this repository yet; add a `LICENSE` file before
+  inviting outside contributions.
