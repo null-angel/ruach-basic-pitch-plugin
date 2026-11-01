@@ -159,16 +159,23 @@ choices are labelled in [`docs/PLUGIN_CONTRACT.md`](docs/PLUGIN_CONTRACT.md) and
 each is isolated in one module so it is cheap to change.
 
 * **Stem manifest shape.** The docs say `manifest.json` lists the stems with
-  `name`, `title` and `file`. The plugin accepts `{"stems": [...]}` or a bare
-  list. If a real take differs, only `manifest.py` changes.
+  `name`, `title` and `file`. A real take writes them under a top-level
+  `{"files": [...]}` key; the plugin also accepts `{"stems": [...]}` or a bare
+  list. If a real take differs again, only `manifest.py` changes.
 * **`.mid` in the take tree.** The docs define audio versions and text/CSV
   reports, not MIDI, so the lab may show a `.mid` branch that cannot be played.
   The files are still written and open fine in a DAW.
 * **Verified so far.** Type-checked and tested against a fake transcriber. Also run
   end to end with **real Basic Pitch** (ONNX Runtime, Python 3.14) on a Ruach Studio
-  2.0.2 install: a synthetic four-note melody came back as the four right pitches,
-  and the running lab listed the step under `GET /lab/plugins` with no errors. It has
-  **not yet been driven from the Refiner page** with a real take.
+  install: a real generated take was split into **four, six and eight** stems and every
+  stem transcribed to MIDI through the lab's `POST /lab/plugin/run` — the Refiner's own
+  backend — with no manifest or runtime errors, and the step listed under
+  `GET /lab/plugins` with no errors. The browser Refiner **page** itself has not been
+  click-tested, but the integration path it calls has.
+* **CI uses a fake transcriber by design.** The suite stays hermetic and fast: it never
+  installs Basic Pitch or downloads the model, so it does not exercise the real ONNX
+  inference path (that is covered by the manual end-to-end run above). Model loading and
+  real MIDI output are therefore not guarded by CI.
 
 ## Documentation
 

@@ -55,16 +55,17 @@ class StepResult:
 
 
 def transcribe_stem(
-    stem: Stem, out_dir: Path, params: Params, transcribe: Transcriber
+    stem: Stem, out_dir: Path, filename: str, params: Params, transcribe: Transcriber
 ) -> StemOutcome:
     """Transcribe one stem and write its MIDI file if any notes were found.
 
-    A failure becomes an ``"error"`` outcome instead of an exception, so one bad
-    stem does not lose the others.
+    Both the transcription and the MIDI write become an ``"error"`` outcome
+    instead of an exception, so one bad stem never loses the others.
 
     Args:
         stem: The stem to transcribe.
         out_dir: Folder the MIDI file is written into (must exist).
+        filename: MIDI file name to write; unique within this run.
         params: Transcription settings.
         transcribe: The transcriber to use.
 
@@ -81,9 +82,39 @@ def transcribe_stem(
     if result.note_count == 0:
         return StemOutcome(stem.name, stem.title, "silent")
 
-    filename = f"{Path(stem.name).name}{MIDI_SUFFIX}"
-    result.midi.write(str(out_dir / filename))
+    try:
+        result.midi.write(str(out_dir / filename))
+    except Exception as exc:
+        # A full disk or a read-only output folder must fail this stem alone,
+        # not abort the step after earlier stems were already written.
+        return StemOutcome(
+            stem.name,
+            stem.title,
+            "error",
+            detail=f"writing MIDI failed: {type(exc).__name__}: {exc}",
+        )
     return StemOutcome(stem.name, stem.title, "ok", notes=result.note_count, midi_file=filename)
+
+
+def _unique_midi_filenames(stems: Sequence[Stem]) -> list[str]:
+    """A distinct ``<name>.mid`` for each stem, in manifest order.
+
+    Any directory parts of a stem's ``name`` are dropped (a stem may not write
+    outside the output folder), and two stems that share a base name are kept
+    apart with a numeric suffix so neither overwrites the other's MIDI.
+    """
+    used: set[str] = set()
+    names: list[str] = []
+    for stem in stems:
+        base = Path(stem.name).name or "stem"
+        candidate = f"{base}{MIDI_SUFFIX}"
+        suffix = 2
+        while candidate in used:
+            candidate = f"{base}-{suffix}{MIDI_SUFFIX}"
+            suffix += 1
+        used.add(candidate)
+        names.append(candidate)
+    return names
 
 
 def run_step(
@@ -107,6 +138,10 @@ def run_step(
     """
     started = clock()
     out_dir.mkdir(parents=True, exist_ok=True)
-    outcomes = [transcribe_stem(stem, out_dir, params, transcribe) for stem in stems]
+    filenames = _unique_midi_filenames(stems)
+    outcomes = [
+        transcribe_stem(stem, out_dir, filename, params, transcribe)
+        for stem, filename in zip(stems, filenames, strict=True)
+    ]
     (out_dir / REPORT_FILE).write_text(render_report_csv(list(outcomes)), encoding="utf-8")
     return StepResult(outcomes=outcomes, took=round(clock() - started, 1))

@@ -9,12 +9,13 @@ import pytest
 
 from ruach_basic_pitch.cli import main
 from ruach_basic_pitch.contract import SUMMARY_MAX_CHARS, ExitCode
-from ruach_basic_pitch.manifest import ManifestError, load_stems
+from ruach_basic_pitch.manifest import ManifestError, Stem, load_stems
 from ruach_basic_pitch.params import Params, load_params, parse_params
 from ruach_basic_pitch.report import StemOutcome, render_report_csv, summarize
-from ruach_basic_pitch.runner import StepResult
+from ruach_basic_pitch.runner import StepResult, run_step
+from ruach_basic_pitch.transcriber import MidiLike, Transcription
 
-from .conftest import FakeTranscriber
+from .conftest import FakeMidi, FakeTranscriber
 
 # --- params -----------------------------------------------------------------
 
@@ -124,3 +125,43 @@ def test_cli_reports_unreadable_params(tmp_path: Path, capsys: pytest.CaptureFix
     code = main([str(tmp_path), str(tmp_path / "out"), str(tmp_path / "missing.json")])
     assert code is ExitCode.FAILED
     assert "FileNotFoundError" in capsys.readouterr().err
+
+
+def test_duplicate_stem_names_get_distinct_midi_files(tmp_path: Path) -> None:
+    # Two stems whose names share a base must not overwrite each other's MIDI.
+    out = tmp_path / "out"
+    stems = [
+        Stem("lead", "Lead", tmp_path / "a.wav"),
+        Stem("lead", "Lead", tmp_path / "b.wav"),
+    ]
+    result = run_step(stems, out, Params(), FakeTranscriber(notes={"a": 3, "b": 4}))
+    assert {o.status for o in result.outcomes} == {"ok"}
+    assert (out / "lead.mid").is_file()
+    assert (out / "lead-2.mid").is_file()
+
+
+def test_a_failed_midi_write_is_isolated_to_its_stem(tmp_path: Path) -> None:
+    # A write failure on one stem must be recorded as that stem's error, leaving
+    # the others written and the step a success.
+    class RaisingMidi:
+        def write(self, filename: str) -> None:
+            raise OSError("disk full")
+
+    class OneWriteFails:
+        def __call__(self, audio_path: Path, params: Params) -> Transcription:
+            midi: MidiLike = RaisingMidi() if audio_path.stem == "bass" else FakeMidi()
+            return Transcription(midi=midi, note_count=3)
+
+    out = tmp_path / "out"
+    stems = [
+        Stem("vocals", "Vocals", tmp_path / "vocals.wav"),
+        Stem("bass", "Bass", tmp_path / "bass.wav"),
+    ]
+    result = run_step(stems, out, Params(), OneWriteFails())
+    by = {o.name: o for o in result.outcomes}
+    assert by["vocals"].status == "ok"
+    assert (out / "vocals.mid").is_file()
+    assert by["bass"].status == "error"
+    assert "writing MIDI failed" in by["bass"].detail
+    assert not (out / "bass.mid").exists()
+    assert result.succeeded is True
